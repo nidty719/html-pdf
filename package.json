@@ -1,0 +1,39 @@
+{
+  "name": "html-to-pdf",
+  "version": "1.0.0",
+  "description": "A simple service that converts HTML content to PDF",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "mocha tests/**/*.test.js",
+    "test:unit": "mocha tests/unit/**/*.test.js",
+    "test:integration": "mocha tests/integration/**/*.test.js"
+  },
+  "keywords": [
+    "html",
+    "pdf",
+    "conversion",
+    "puppeteer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "helmet": "^6.0.1",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.2",
+    "puppeteer": "^19.7.2"
+  },
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "nodemon": "^2.0.20",
+    "sinon": "^15.0.1",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
