@@ -1,11 +1,12 @@
 {
   "name": "html-to-pdf",
   "version": "1.0.0",
-  "description": "A simple service that converts HTML content to PDF",
-  "main": "src/app.js",
+  "description": "A Google Cloud Function that converts HTML content to PDF",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "start": "functions-framework --target=htmlToPdf",
+    "dev": "nodemon --exec functions-framework --target=htmlToPdf",
+    "deploy": "gcloud functions deploy htmlToPdf --runtime nodejs16 --trigger-http --allow-unauthenticated",
     "test": "mocha tests/**/*.test.js",
     "test:unit": "mocha tests/unit/**/*.test.js",
     "test:integration": "mocha tests/integration/**/*.test.js"
@@ -14,13 +15,14 @@
     "html",
     "pdf",
     "conversion",
-    "puppeteer"
+    "puppeteer",
+    "cloud-function"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@google-cloud/functions-framework": "^3.1.0",
     "cors": "^2.8.5",
-    "express": "^4.18.2",
     "helmet": "^6.0.1",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.2",
@@ -34,6 +36,6 @@
     "supertest": "^6.3.3"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=16.0.0"
   }
 }

@@ -1,6 +1,6 @@
 # HTML to PDF Converter
 
-A simple service that converts HTML content to PDF format. This service is designed to be lightweight, easy to deploy, and simple to use.
+A service that converts HTML content to PDF format. This service is designed to be lightweight, easy to deploy, and simple to use. It can be deployed as a standalone Express server, a Docker container, or a Google Cloud Function.
 
 ## Features
 
@@ -8,16 +8,21 @@ A simple service that converts HTML content to PDF format. This service is desig
 - Supports both direct HTML input and HTML file uploads
 - Returns PDF directly to the user
 - Customizable PDF formatting options
-- Easy to deploy as standalone service or Docker container
+- Multiple deployment options: Express, Docker, or Google Cloud Functions
 
 ## Installation
 
-### Local Setup
+This project offers multiple deployment options to suit your needs.
+
+### Local Setup (Express Server)
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/html-to-pdf.git
-cd html-to-pdf
+git clone https://github.com/nidty719/html-pdf.git
+cd html-pdf
+
+# Use the main branch for Express server
+git checkout main
 
 # Install dependencies
 npm install
@@ -31,6 +36,13 @@ The service will be available at http://localhost:3000.
 ### Docker Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/nidty719/html-pdf.git
+cd html-pdf
+
+# Use the main branch
+git checkout main
+
 # Build the Docker image
 docker build -t html-to-pdf .
 
@@ -40,14 +52,51 @@ docker run -p 3000:3000 html-to-pdf
 
 The service will be available at http://localhost:3000.
 
+### Google Cloud Functions Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/nidty719/html-pdf.git
+cd html-pdf
+
+# Use the cloud-function branch
+git checkout cloud-function
+
+# Install dependencies
+npm install
+
+# Test locally
+npm start
+```
+
+The service will be available at http://localhost:8080 for local testing.
+
+#### Deploying to Google Cloud Functions
+
+```bash
+# Deploy directly from local machine
+npm run deploy
+
+# Or deploy via GitHub integration
+1. Connect your GitHub repository to Google Cloud Build
+2. Configure the build trigger to use cloudbuild.yaml
+3. Push changes to trigger automatic deployment
+```
+
 ## Usage
 
 ### API Endpoints
 
+#### Express Server (main branch)
 - `GET /` - Service information
 - `GET /health` - Health check endpoint
 - `POST /convert` - Convert HTML to PDF from JSON payload
 - `POST /convert/file` - Convert HTML to PDF from uploaded file
+
+#### Google Cloud Function (cloud-function branch)
+- `POST /` - Single endpoint that handles both JSON payload and file upload
+  - For JSON payload: Send body with `html` and optional `options`
+  - For file upload: Send multipart/form-data with `htmlFile` and optional `options`
 
 ### Converting HTML to PDF
 
@@ -96,7 +145,14 @@ Send a multipart/form-data POST request to the `/convert/file` endpoint with:
 #### Using cURL with JSON Payload
 
 ```bash
+# For Express Server
 curl -X POST http://localhost:3000/convert \
+  -H "Content-Type: application/json" \
+  -d '{"html": "<h1>Hello World</h1>", "options": {"filename": "hello.pdf"}}' \
+  -o hello.pdf
+
+# For Google Cloud Function
+curl -X POST https://REGION-PROJECT_ID.cloudfunctions.net/htmlToPdf \
   -H "Content-Type: application/json" \
   -d '{"html": "<h1>Hello World</h1>", "options": {"filename": "hello.pdf"}}' \
   -o hello.pdf
@@ -105,7 +161,14 @@ curl -X POST http://localhost:3000/convert \
 #### Using cURL with File Upload
 
 ```bash
+# For Express Server
 curl -X POST http://localhost:3000/convert/file \
+  -F "htmlFile=@/path/to/your/file.html" \
+  -F 'options={"format": "Letter", "orientation": "landscape", "filename": "hello.pdf"}' \
+  -o hello.pdf
+
+# For Google Cloud Function
+curl -X POST https://REGION-PROJECT_ID.cloudfunctions.net/htmlToPdf \
   -F "htmlFile=@/path/to/your/file.html" \
   -F 'options={"format": "Letter", "orientation": "landscape", "filename": "hello.pdf"}' \
   -o hello.pdf
@@ -172,10 +235,23 @@ fetch('http://localhost:3000/convert/file', {
 
 ## Configuration
 
-The service can be configured using environment variables:
+### Express Server Configuration
+
+The Express server can be configured using environment variables:
 
 - `PORT` - Port to run the server on (default: 3000)
 - `NODE_ENV` - Environment mode (development/production)
+
+### Google Cloud Function Configuration
+
+The Google Cloud Function can be configured during deployment:
+
+- Memory allocation (default: 1024MB)
+- Timeout (default: 300s)
+- Region (default: us-central1)
+- Runtime (Node.js 16)
+
+These settings can be adjusted in the `cloudbuild.yaml` file or when deploying manually.
 
 ## Development
 
@@ -194,11 +270,33 @@ npm run test:integration
 
 ### Running in Development Mode
 
+#### Express Server (main branch)
 ```bash
 npm run dev
 ```
 
+#### Google Cloud Function (cloud-function branch)
+```bash
+npm start
+```
+
 This will start the service with auto-reloading enabled for changes.
+
+## GitHub Integration with Google Cloud
+
+To set up automatic deployment from GitHub to Google Cloud Functions:
+
+1. Push your code to GitHub
+2. In Google Cloud Console, navigate to Cloud Build > Triggers
+3. Connect your GitHub repository
+4. Create a new trigger:
+   - Name: "Deploy HTML to PDF Function"
+   - Event: Push to a branch
+   - Source: cloud-function branch
+   - Configuration: Cloud Build configuration file (cloudbuild.yaml)
+5. Save the trigger
+
+Now, whenever you push to the cloud-function branch, the function will be automatically deployed.
 
 ## License
 
