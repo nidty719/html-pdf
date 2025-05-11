@@ -8,42 +8,93 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { convertHtmlToPdf } = require('./src/converter');
-const multer = require('multer');
+const Busboy = require('busboy');
 
-// Configure multer for file uploads in memory storage
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max file size
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept only HTML files
-    if (file.mimetype === 'text/html' || path.extname(file.originalname).toLowerCase() === '.html') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only HTML files are allowed'));
+/**
+ * Parse multipart/form-data
+ * @param {object} req - HTTP request object
+ * @returns {Promise<object>} Parsed form data
+ */
+function parseFormData(req) {
+  return new Promise((resolve, reject) => {
+    // Check if this is a multipart/form-data request
+    if (!req.headers['content-type'] || !req.headers['content-type'].includes('multipart/form-data')) {
+      return resolve({});
     }
-  }
-});
 
-// Middleware for multer in Cloud Functions
-const multerMiddleware = (req, res, next) => {
-  if (!req.rawBody || !req.get('content-type')?.includes('multipart/form-data')) {
-    return next();
-  }
-  
-  // Process the multipart form data
-  upload.single('htmlFile')(req, res, (err) => {
-    if (err) {
-      console.error('Multer error:', err);
-      return res.status(400).json({
-        success: false,
-        error: err.message
+    const busboy = Busboy({ 
+      headers: req.headers,
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+      }
+    });
+
+    const fields = {};
+    let fileBuffer = null;
+    let fileName = null;
+    let fileError = null;
+
+    // Handle non-file fields
+    busboy.on('field', (fieldname, val) => {
+      fields[fieldname] = val;
+    });
+
+    // Handle file upload
+    busboy.on('file', (fieldname, file, info) => {
+      const { filename, encoding, mimeType } = info;
+      
+      // Only accept HTML files
+      if (mimeType !== 'text/html' && !filename.toLowerCase().endsWith('.html')) {
+        fileError = 'Only HTML files are allowed';
+        file.resume(); // Discard the file
+        return;
+      }
+
+      // Collect file data
+      const chunks = [];
+      fileName = filename;
+
+      file.on('data', (data) => {
+        chunks.push(data);
       });
+
+      file.on('end', () => {
+        if (!fileError) {
+          fileBuffer = Buffer.concat(chunks);
+        }
+      });
+    });
+
+    // Handle completion
+    busboy.on('finish', () => {
+      if (fileError) {
+        return reject(new Error(fileError));
+      }
+      
+      resolve({
+        fields,
+        file: fileBuffer ? {
+          buffer: fileBuffer,
+          filename: fileName
+        } : null
+      });
+    });
+
+    // Handle errors
+    busboy.on('error', (error) => {
+      reject(error);
+    });
+
+    // Pipe the request to busboy
+    if (req.rawBody) {
+      // Cloud Functions environment
+      busboy.end(req.rawBody);
+    } else {
+      // Regular Node.js environment
+      req.pipe(busboy);
     }
-    next();
   });
-};
+}
 
 /**
  * Main HTTP function for HTML to PDF conversion
@@ -70,20 +121,49 @@ functions.http('htmlToPdf', async (req, res) => {
       });
     }
     
-    // Apply multer middleware for file uploads
-    await new Promise((resolve) => multerMiddleware(req, res, resolve));
-    
     let html;
     let options = {};
     
-    // Check if the request is a file upload or JSON payload
-    if (req.file) {
-      // File upload case
-      html = req.file.buffer.toString('utf-8');
-      options = req.body.options ? JSON.parse(req.body.options) : {};
-    } else {
+    // Handle request based on content type
+    const contentType = req.headers['content-type'] || '';
+    console.log('Content-Type:', contentType);
+    
+    if (contentType.includes('multipart/form-data')) {
+      // File upload case - parse form data
+      try {
+        console.log('Parsing multipart form data');
+        const formData = await parseFormData(req);
+        console.log('Form data parsed:', {
+          hasFile: !!formData.file,
+          fieldNames: Object.keys(formData.fields)
+        });
+        
+        if (!formData.file) {
+          return res.status(400).json({
+            success: false,
+            error: 'No HTML file uploaded'
+          });
+        }
+        
+        html = formData.file.buffer.toString('utf-8');
+        
+        if (formData.fields.options) {
+          try {
+            options = JSON.parse(formData.fields.options);
+          } catch (err) {
+            console.warn('Failed to parse options JSON:', err);
+          }
+        }
+      } catch (err) {
+        console.error('Form data parsing error:', err);
+        return res.status(400).json({
+          success: false,
+          error: err.message || 'Error processing form data'
+        });
+      }
+    } else if (contentType.includes('application/json')) {
       // JSON payload case
-      if (!req.body.html) {
+      if (!req.body || !req.body.html) {
         return res.status(400).json({
           success: false,
           error: 'HTML content is required'
@@ -92,7 +172,14 @@ functions.http('htmlToPdf', async (req, res) => {
       
       html = req.body.html;
       options = req.body.options || {};
+    } else {
+      return res.status(415).json({
+        success: false,
+        error: 'Unsupported Media Type. Use multipart/form-data or application/json'
+      });
     }
+    
+    console.log('Converting HTML to PDF with options:', options);
     
     // Convert HTML to PDF
     const pdfBuffer = await convertHtmlToPdf(html, options);
