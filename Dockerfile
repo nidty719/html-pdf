@@ -44,7 +44,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy app source code
 COPY . .
@@ -52,5 +52,5 @@ COPY . .
 # Expose the port the app runs on
 EXPOSE 3000
 
-# Start the application
-CMD ["node", "src/app.js"]
+# Start the application for Cloud Function
+CMD ["npm", "start"]
