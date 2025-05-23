@@ -1,13 +1,15 @@
-# HTML to PDF Converter
+# HTML to PDF and PDF to Images Converter
 
-A service that converts HTML content to PDF format. This service is designed to be lightweight, easy to deploy, and simple to use. It can be deployed as a standalone Express server, a Docker container, or a Google Cloud Function.
+A service that converts HTML content to PDF format and PDF documents to images. This service is designed to be lightweight, easy to deploy, and simple to use. It can be deployed as a standalone Express server, a Docker container, or a Google Cloud Function.
 
 ## Features
 
 - Converts HTML content to PDF
-- Supports both direct HTML input and HTML file uploads
-- Returns PDF directly to the user
+- Converts PDF documents to images (PNG, JPEG, WebP)
+- Supports both direct HTML/PDF input and file uploads
+- Returns PDF directly to the user or base64-encoded images
 - Customizable PDF formatting options
+- Configurable image conversion settings (format, DPI, quality)
 - Multiple deployment options: Express, Docker, or Google Cloud Functions
 
 ## Installation
@@ -97,6 +99,7 @@ npm run deploy
 - `POST /` - Single endpoint that handles both JSON payload and file upload
   - For JSON payload: Send body with `html` and optional `options`
   - For file upload: Send multipart/form-data with `htmlFile` and optional `options`
+  - For PDF to Images: Include `conversionType: "pdfToImages"` in your request
 
 ### Converting HTML to PDF
 
@@ -231,6 +234,134 @@ fetch('http://localhost:3000/convert/file', {
   a.click();
   a.remove();
 });
+```
+
+### Converting PDF to Images
+
+The Google Cloud Function version supports converting PDF documents to images. This feature is only available in the cloud-function branch.
+
+#### Method 1: Using JSON Payload with Base64 PDF
+
+Send a POST request with the following JSON payload:
+
+```json
+{
+  "conversionType": "pdfToImages",
+  "pdf": "<base64-encoded-pdf-content>",
+  "options": {
+    "format": "png",      // Options: "png", "jpeg", "webp"
+    "dpi": 150,           // Resolution in DPI (default: 150)
+    "quality": 90         // Quality for JPEG/WebP (1-100, default: 90)
+  }
+}
+```
+
+#### Method 2: Using File Upload
+
+Send a multipart/form-data POST request with:
+
+- A PDF file in the `file` field
+- Set `conversionType` field to `"pdfToImages"`
+- Optional JSON-formatted options in the `options` field
+
+#### Response Format
+
+The API returns a JSON response containing base64-encoded images:
+
+```json
+{
+  "success": true,
+  "imageCount": 3,
+  "format": "png",
+  "images": [
+    {
+      "page": 1,
+      "data": "<base64-encoded-image-data>",
+      "mimeType": "image/png"
+    },
+    {
+      "page": 2,
+      "data": "<base64-encoded-image-data>",
+      "mimeType": "image/png"
+    },
+    // ... more pages
+  ]
+}
+```
+
+### Examples for PDF to Images
+
+#### Using cURL with JSON Payload
+
+```bash
+# Convert PDF to PNG images
+curl -X POST https://REGION-PROJECT_ID.cloudfunctions.net/htmlToPdf \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversionType": "pdfToImages",
+    "pdf": "'$(base64 -i document.pdf)'",
+    "options": {
+      "format": "png",
+      "dpi": 300
+    }
+  }' \
+  -o response.json
+```
+
+#### Using cURL with File Upload
+
+```bash
+# Upload PDF file and convert to JPEG images
+curl -X POST https://REGION-PROJECT_ID.cloudfunctions.net/htmlToPdf \
+  -F "file=@/path/to/document.pdf" \
+  -F "conversionType=pdfToImages" \
+  -F 'options={"format": "jpeg", "quality": 85}' \
+  -o response.json
+```
+
+#### JavaScript Example for PDF to Images
+
+```javascript
+// Convert PDF file to images
+async function convertPdfToImages(pdfFile) {
+  const formData = new FormData();
+  formData.append('file', pdfFile);
+  formData.append('conversionType', 'pdfToImages');
+  formData.append('options', JSON.stringify({
+    format: 'png',
+    dpi: 200
+  }));
+
+  const response = await fetch('https://REGION-PROJECT_ID.cloudfunctions.net/htmlToPdf', {
+    method: 'POST',
+    body: formData
+  });
+
+  const result = await response.json();
+  
+  if (result.success) {
+    // Process each page image
+    result.images.forEach((image, index) => {
+      // Convert base64 to blob and create download link
+      const byteCharacters = atob(image.data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: image.mimeType });
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `page-${image.page}.${result.format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    });
+  }
+}
 ```
 
 ## Configuration

@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { convertHtmlToPdf } = require('./src/converter');
+const { convertPdfToImages } = require('./src/pdfToImages');
 const Busboy = require('busboy');
 
 /**
@@ -43,9 +44,12 @@ function parseFormData(req) {
     busboy.on('file', (fieldname, file, info) => {
       const { filename, encoding, mimeType } = info;
       
-      // Only accept HTML files
-      if (mimeType !== 'text/html' && !filename.toLowerCase().endsWith('.html')) {
-        fileError = 'Only HTML files are allowed';
+      // Accept HTML and PDF files
+      const isHtml = mimeType === 'text/html' || filename.toLowerCase().endsWith('.html');
+      const isPdf = mimeType === 'application/pdf' || filename.toLowerCase().endsWith('.pdf');
+      
+      if (!isHtml && !isPdf) {
+        fileError = 'Only HTML and PDF files are allowed';
         file.resume(); // Discard the file
         return;
       }
@@ -97,7 +101,7 @@ function parseFormData(req) {
 }
 
 /**
- * Main HTTP function for HTML to PDF conversion
+ * Main HTTP function for HTML to PDF and PDF to Images conversion
  */
 functions.http('htmlToPdf', async (req, res) => {
   try {
@@ -122,7 +126,9 @@ functions.http('htmlToPdf', async (req, res) => {
     }
     
     let html;
+    let pdfBuffer;
     let options = {};
+    let conversionType = 'htmlToPdf'; // Default conversion type
     
     // Handle request based on content type
     const contentType = req.headers['content-type'] || '';
@@ -145,7 +151,14 @@ functions.http('htmlToPdf', async (req, res) => {
           });
         }
         
-        html = formData.file.buffer.toString('utf-8');
+        // Check file type
+        const filename = formData.file.filename || '';
+        if (filename.toLowerCase().endsWith('.pdf')) {
+          conversionType = 'pdfToImages';
+          pdfBuffer = formData.file.buffer;
+        } else {
+          html = formData.file.buffer.toString('utf-8');
+        }
         
         if (formData.fields.options) {
           try {
@@ -153,6 +166,11 @@ functions.http('htmlToPdf', async (req, res) => {
           } catch (err) {
             console.warn('Failed to parse options JSON:', err);
           }
+        }
+        
+        // Check for explicit conversion type
+        if (formData.fields.conversionType) {
+          conversionType = formData.fields.conversionType;
         }
       } catch (err) {
         console.error('Form data parsing error:', err);
@@ -163,14 +181,27 @@ functions.http('htmlToPdf', async (req, res) => {
       }
     } else if (contentType.includes('application/json')) {
       // JSON payload case
-      if (!req.body || !req.body.html) {
-        return res.status(400).json({
-          success: false,
-          error: 'HTML content is required'
-        });
+      conversionType = req.body.conversionType || 'htmlToPdf';
+      
+      if (conversionType === 'pdfToImages') {
+        if (!req.body || !req.body.pdf) {
+          return res.status(400).json({
+            success: false,
+            error: 'PDF content is required for PDF to images conversion'
+          });
+        }
+        // Decode base64 PDF
+        pdfBuffer = Buffer.from(req.body.pdf, 'base64');
+      } else {
+        if (!req.body || !req.body.html) {
+          return res.status(400).json({
+            success: false,
+            error: 'HTML content is required'
+          });
+        }
+        html = req.body.html;
       }
       
-      html = req.body.html;
       options = req.body.options || {};
     } else {
       return res.status(415).json({
@@ -179,24 +210,44 @@ functions.http('htmlToPdf', async (req, res) => {
       });
     }
     
-    console.log('Converting HTML to PDF with options:', options);
+    console.log(`Converting with type: ${conversionType}, options:`, options);
     
-    // Convert HTML to PDF
-    const pdfBuffer = await convertHtmlToPdf(html, options);
-    
-    // Set response headers
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${options.filename || 'output.pdf'}"`);
-    
-    // Send the PDF buffer directly to the client
-    res.send(pdfBuffer);
+    if (conversionType === 'pdfToImages') {
+      // Convert PDF to images
+      const images = await convertPdfToImages(pdfBuffer, options);
+      
+      // Return images as JSON with base64 encoded data
+      const response = {
+        success: true,
+        imageCount: images.length,
+        format: options.format || 'png',
+        images: images.map(img => ({
+          page: img.page,
+          data: img.buffer.toString('base64'),
+          mimeType: `image/${options.format || 'png'}`
+        }))
+      };
+      
+      res.setHeader('Content-Type', 'application/json');
+      res.send(response);
+    } else {
+      // Convert HTML to PDF
+      const pdfBuffer = await convertHtmlToPdf(html, options);
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${options.filename || 'output.pdf'}"`);
+      
+      // Send the PDF buffer directly to the client
+      res.send(pdfBuffer);
+    }
   } catch (error) {
     console.error('Error in HTML to PDF conversion:', error);
     
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        error: 'Error converting HTML to PDF',
+        error: 'Error in conversion',
         message: error.message
       });
     }
