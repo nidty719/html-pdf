@@ -84,7 +84,6 @@ async function convertHtmlToPdf(html, options = {}) {
 
     // Configure page
     const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(30000);
 
     // Set content with timeout options
     await page.setContent(html, {

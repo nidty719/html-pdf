@@ -38,8 +38,15 @@ describe('HTML to PDF Converter', () => {
     
     expect(puppeteerLaunchStub.calledOnce).to.be.true;
     expect(puppeteerLaunchStub.firstCall.args[0]).to.deep.include({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      headless: true
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--disable-extensions'
+      ],
+      headless: 'new'
     });
   });
 

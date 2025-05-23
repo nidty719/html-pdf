@@ -6,7 +6,47 @@
 const { PDFDocument } = require('pdf-lib');
 const sharp = require('sharp');
 const puppeteer = require('puppeteer');
-const { findChromePath } = require('./converter');
+const os = require('os');
+const fs = require('fs');
+
+/**
+ * Find Chrome executable path based on the platform
+ * @returns {string|undefined} Chrome executable path or undefined
+ */
+function findChromePath() {
+  const chromePaths = {
+    darwin: [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Chrome.app/Contents/MacOS/Chrome',
+    ],
+    linux: [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+    ],
+    win32: [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
+    ],
+  };
+
+  const platform = os.platform();
+  const paths = chromePaths[platform] || [];
+
+  for (const browserPath of paths) {
+    try {
+      if (fs.existsSync(browserPath)) {
+        return browserPath;
+      }
+    } catch (err) {
+      // Continue to next path
+    }
+  }
+
+  return undefined;
+}
 
 /**
  * Convert PDF buffer to array of image buffers
@@ -188,45 +228,5 @@ async function convertPdfToImages(pdfBuffer, options = {}) {
   }
 }
 
-/**
- * Export findChromePath function from converter module
- */
-function findChromePath() {
-  const os = require('os');
-  const fs = require('fs');
-  
-  const chromePaths = {
-    darwin: [
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Chrome.app/Contents/MacOS/Chrome',
-    ],
-    linux: [
-      '/usr/bin/google-chrome',
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
-    ],
-    win32: [
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
-    ],
-  };
-
-  const platform = os.platform();
-  const paths = chromePaths[platform] || [];
-
-  for (const browserPath of paths) {
-    try {
-      if (fs.existsSync(browserPath)) {
-        return browserPath;
-      }
-    } catch (err) {
-      // Continue to next path
-    }
-  }
-
-  return undefined;
-}
 
 module.exports = { convertPdfToImages };
