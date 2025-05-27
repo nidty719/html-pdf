@@ -17,6 +17,6 @@ steps:
       - '--trigger-http'
       - '--allow-unauthenticated'
       - '--entry-point=htmlToPdf'
-      - '--memory=1024MB'
+      - '--memory=2048MB'
       - '--timeout=300s'
       - '--region=us-central1'
